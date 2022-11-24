@@ -5,13 +5,59 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
-from keras.preprocessing import sequence
+# from keras.preprocessing import sequence
+from keras.utils import pad_sequences
 from utils import load_data
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA: torch.cuda.set_device(0)
 LTensor = torch.cuda.LongTensor if USE_CUDA else torch.LongTensor
 
+
+class Mixer(nn.Module): 
+    
+    def __init__(self, num_mixers: int, max_seq_len: int, hidden_dim: int, mlp_hidden_dim: int, **kwargs):
+        super(Mixer, self).__init__(**kwargs)
+        self.mixers = nn.Sequential(*[
+            MixerLayer(max_seq_len, hidden_dim, mlp_hidden_dim, mlp_hidden_dim) for _ in range(num_mixers)
+        ])
+    
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor: 
+        return self.mixers(inputs)
+
+class MixerLayer(nn.Module): 
+
+    def __init__(self, max_seq_len: int, hidden_dim: int, channel_hidden_dim: int, seq_hidden_dim: int, **kwargs):
+        super(MixerLayer, self).__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.layer_norm_1 = nn.LayerNorm(hidden_dim)
+        self.mlp_1 = MlpLayer(max_seq_len, seq_hidden_dim)
+        self.layer_norm_2 = nn.LayerNorm(hidden_dim)
+        self.mlp_2 = MlpLayer(hidden_dim, channel_hidden_dim)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor: 
+        residual = inputs
+        outputs = self.layer_norm_1(inputs)
+        outputs = outputs.transpose(-1, -2)
+        outputs = self.mlp_1(outputs)
+        outputs = outputs.transpose(-1, -2) + residual
+        residual = outputs
+        outputs = self.layer_norm_2(outputs)
+        outputs = self.mlp_2(outputs) + residual
+        return outputs
+
+class MlpLayer(nn.Module): 
+
+    def __init__(self, hidden_dim: int, intermediate_dim: int, **kwargs):
+        super(MlpLayer, self).__init__(**kwargs)
+        self.layers = nn.Sequential(*[
+            nn.Linear(hidden_dim, intermediate_dim), 
+            nn.GELU(), 
+            nn.Linear(intermediate_dim, hidden_dim)
+        ])
+    
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor: 
+        return self.layers(inputs)
 
 class RNN(nn.Module):
     def __init__(self, x_dim, e_dim, h_dim, o_dim):
@@ -56,15 +102,35 @@ class CNN(nn.Module):
         return self.softmax(hidden), self.log_softmax(hidden)
 
 
+class MLP(nn.Module):
+    def __init__(self, x_dim, e_dim, h_dim, o_dim) -> None:
+        super(MLP, self).__init__()
+        self.emb = nn.Embedding(x_dim, e_dim, padding_idx=0)
+        self.dropout = nn.Dropout(0.2)
+        self.model = Mixer(2, 50, h_dim, h_dim)
+        self.fc = nn.Linear(e_dim, o_dim)
+        self.softmax = nn.Softmax(dim=1)
+        self.log_softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, x, lens):
+        out = self.emb(x)
+        out = self.dropout(out)
+        out = self.model(out)
+        out = self.fc(out[:, -1, :])
+        return self.softmax(out), self.log_softmax(out)
+
+
 class Model(object):
     def __init__(self, v_size):
         self.model = None
         self.b_size = 64
-        self.lr = 0.001
-        self.model = RNN(v_size, 256, 256, 2)
+        self.lr = 0.01
+        # self.model = RNN(v_size, 256, 256, 2)
+        # self.model = CNN(v_size, 256, 128, 2)
+        self.model = MLP(v_size, 64, 64, 2)
 
-    # self.model = CNN(v_size,256,128,2)
-    def train(self, x_tr, y_tr, l_tr, x_te, y_te, l_te, epochs=15):
+    def train(self, x_tr, y_tr, l_tr, x_te, y_te, l_te, epochs=200):
+        all_acc = []
         assert self.model is not None
         if USE_CUDA: self.model = self.model.cuda()
         loss_func = nn.NLLLoss()
@@ -91,7 +157,8 @@ class Model(object):
                     bl = Variable(LTensor(l_te[i:i + self.b_size]))
                     _, py = torch.max(self.model(Variable(LTensor(bx)), bl)[1], 1)
                     accu.append((py == by).float().mean().item())
-            print(np.mean(losses), np.mean(accu))
+            all_acc.append(np.mean(accu))
+            print(np.mean(losses), np.mean(accu), np.max(all_acc))
 
 
 if __name__ == '__main__':
@@ -105,7 +172,7 @@ if __name__ == '__main__':
     (x_tr, y_tr, _), _, (x_te, y_te, _), v_size, _ = load_data(name)
     l_tr = list(map(lambda x: min(len(x), x_len), x_tr))
     l_te = list(map(lambda x: min(len(x), x_len), x_te))
-    x_tr = sequence.pad_sequences(x_tr, maxlen=x_len)
-    x_te = sequence.pad_sequences(x_te, maxlen=x_len)
+    x_tr = pad_sequences(x_tr, maxlen=x_len)
+    x_te = pad_sequences(x_te, maxlen=x_len)
     clf = Model(v_size)
     clf.train(x_tr, y_tr, l_tr, x_te, y_te, l_te)

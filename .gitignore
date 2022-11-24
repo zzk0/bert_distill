@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/cache/t_de
+data/cache/t_tr
+data/cache/model
+data/cache/word2vec

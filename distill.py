@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import torch
+import torch.nn.functional as F
 from transformers import BertTokenizer
 from ptbert import *
 from small import *
@@ -56,9 +57,9 @@ if __name__ == '__main__':
     l_tr = list(map(lambda x: min(len(x), x_len), x_tr))
     l_de = list(map(lambda x: min(len(x), x_len), x_de))
     l_te = list(map(lambda x: min(len(x), x_len), x_te))
-    x_tr = sequence.pad_sequences(x_tr, maxlen=x_len)
-    x_de = sequence.pad_sequences(x_de, maxlen=x_len)
-    x_te = sequence.pad_sequences(x_te, maxlen=x_len)
+    x_tr = pad_sequences(x_tr, maxlen=x_len)
+    x_de = pad_sequences(x_de, maxlen=x_len)
+    x_te = pad_sequences(x_te, maxlen=x_len)
     with torch.no_grad():
         t_tr = np.vstack([teacher.predict(text) for text in tqdm(t_tr)])
         t_de = np.vstack([teacher.predict(text) for text in tqdm(t_de)])
@@ -69,12 +70,14 @@ if __name__ == '__main__':
     # with open('./data/cache/t_de', 'rb') as fin:
     #     t_de = pickle.load(fin)
 
-    model = RNN(v_size, 256, 256, 2)
-    # model = CNN(v_size,256,128,2)
+    model = MLP(v_size, 64, 64, 2)
+    # model = RNN(v_size, 256, 256, 2)
+    # model = CNN(v_size, 256, 128, 2)
     if USE_CUDA: model = model.cuda()
     opt = optim.Adam(model.parameters(), lr=lr)
     ce_loss = nn.NLLLoss()
     mse_loss = nn.MSELoss()
+    kl_div_loss = nn.KLDivLoss()
     for epoch in range(epochs):
         losses = []
         accu = []
@@ -87,6 +90,7 @@ if __name__ == '__main__':
             bt = Variable(FTensor(t_tr[i:i + b_size]))
             py1, py2 = model(bx, bl)
             loss = alpha * ce_loss(py2, by) + (1-alpha) * mse_loss(py1, bt)  # in paper, only mse is used
+            # loss = alpha * ce_loss(py2, by) + (1 - alpha) * kl_div_loss(py2, bt)
             loss.backward()
             opt.step()
             losses.append(loss.item())

@@ -42,8 +42,8 @@ def run_small():
     x_len = 50
     name = 'hotel'  # clothing, fruit, hotel, pda, shampoo
     (x_tr, y_tr, _), _, (x_te, y_te, _), v_size, embs = load_data(name)
-    x_tr = sequence.pad_sequences(x_tr, maxlen=x_len)
-    x_te = sequence.pad_sequences(x_te, maxlen=x_len)
+    x_tr = pad_sequences(x_tr, maxlen=x_len)
+    x_te = pad_sequences(x_te, maxlen=x_len)
     y_tr = to_categorical(y_tr, 2)
     y_te = to_categorical(y_te, 2)
     # model = get_textcnn(x_len,v_size,embs)
@@ -62,9 +62,9 @@ def run_distill():
 
     name = 'hotel'  # clothing, fruit, hotel, pda, shampoo
     (x_tr, y_tr, _), (x_de, y_de, _), (x_te, y_te, _), v_size, embs = load_data(name)
-    x_tr = sequence.pad_sequences(x_tr, maxlen=x_len)
-    x_de = sequence.pad_sequences(x_de, maxlen=x_len)
-    x_te = sequence.pad_sequences(x_te, maxlen=x_len)
+    x_tr = pad_sequences(x_tr, maxlen=x_len)
+    x_de = pad_sequences(x_de, maxlen=x_len)
+    x_te = pad_sequences(x_te, maxlen=x_len)
     y_tr = to_categorical(y_tr, 2)
     y_de = to_categorical(y_de, 2)
     y_te = to_categorical(y_te, 2)
