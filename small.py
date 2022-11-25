@@ -4,6 +4,7 @@ import torch, numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import time
 from torch.autograd import Variable
 # from keras.preprocessing import sequence
 from keras.utils import pad_sequences
@@ -126,8 +127,8 @@ class Model(object):
         self.b_size = 64
         self.lr = 0.01
         # self.model = RNN(v_size, 256, 256, 2)
-        # self.model = CNN(v_size, 256, 128, 2)
-        self.model = MLP(v_size, 64, 64, 2)
+        self.model = CNN(v_size, 256, 128, 2)
+        # self.model = MLP(v_size, 64, 64, 2)
 
     def train(self, x_tr, y_tr, l_tr, x_te, y_te, l_te, epochs=200):
         all_acc = []
@@ -135,6 +136,7 @@ class Model(object):
         if USE_CUDA: self.model = self.model.cuda()
         loss_func = nn.NLLLoss()
         opt = optim.Adam(self.model.parameters(), lr=self.lr)
+        total_time = 0
         for epoch in range(epochs):
             losses = []
             accu = []
@@ -150,6 +152,7 @@ class Model(object):
                 opt.step()
                 losses.append(loss.item())
             self.model.eval()
+            t0 = time.time()
             with torch.no_grad():
                 for i in range(0, len(x_te), self.b_size):
                     bx = Variable(LTensor(x_te[i:i + self.b_size]))
@@ -158,7 +161,11 @@ class Model(object):
                     _, py = torch.max(self.model(Variable(LTensor(bx)), bl)[1], 1)
                     accu.append((py == by).float().mean().item())
             all_acc.append(np.mean(accu))
+            t1 = time.time()
+            total_time += (t1 - t0)
+            print('eval time cost: ', t1 - t0)
             print(np.mean(losses), np.mean(accu), np.max(all_acc))
+        print('total time cost: ', total_time)
 
 
 if __name__ == '__main__':

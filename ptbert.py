@@ -78,7 +78,7 @@ class BertClassification(BertPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids, input_mask, label_ids):
-        _, pooled_output = self.bert(input_ids, None, input_mask)
+        pooled_output = self.bert(input_ids, None, input_mask)[1]
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         if label_ids is not None:
@@ -120,7 +120,7 @@ def compute_metrics(preds, labels):
     return {'ac': (preds == labels).mean(), 'f1': f1_score(y_true=labels, y_pred=preds)}
 
 
-def main(bert_model='bert-base-chinese', cache_dir=None,
+def main(bert_model='/home/percent1/models/nlp/text-classification/pretrained/bert-base-chinese', cache_dir=None,
          max_seq=128, batch_size=16, num_epochs=10, lr=2e-5):
     processor = Processor()
     train_examples = processor.get_train_examples('data/hotel')

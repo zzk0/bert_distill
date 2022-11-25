@@ -11,7 +11,7 @@ FTensor = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
 
 
 class Teacher(object):
-    def __init__(self, bert_model='bert-base-chinese', max_seq=128):
+    def __init__(self, bert_model='/home/percent1/models/nlp/text-classification/pretrained/bert-base-chinese', max_seq=128):
         self.max_seq = max_seq
         self.tokenizer = BertTokenizer.from_pretrained(
             bert_model, do_lower_case=True)
@@ -70,9 +70,9 @@ if __name__ == '__main__':
     # with open('./data/cache/t_de', 'rb') as fin:
     #     t_de = pickle.load(fin)
 
-    model = MLP(v_size, 64, 64, 2)
+    # model = MLP(v_size, 64, 64, 2)
     # model = RNN(v_size, 256, 256, 2)
-    # model = CNN(v_size, 256, 128, 2)
+    model = CNN(v_size, 256, 128, 2)
     if USE_CUDA: model = model.cuda()
     opt = optim.Adam(model.parameters(), lr=lr)
     ce_loss = nn.NLLLoss()
